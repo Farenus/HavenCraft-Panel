@@ -1,2 +1,2 @@
 # HavenCraft-Panel
-control panel for servers minecraft
+web control panel for servers minecraft
