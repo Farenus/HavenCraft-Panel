@@ -1,0 +1,25 @@
+{
+  "servers": [
+    {
+      "name": "proxy",
+      "path": "/home/michal/minecraft-servers/proxy",
+      "start_script": "start.sh",
+      "auto_start": true,
+      "auto_restart": true
+    },
+    {
+      "name": "lobby1",
+      "path": "/home/michal/minecraft-servers/lobby1",
+      "start_script": "start.sh",
+      "auto_start": true,
+      "auto_restart": true
+    },
+    {
+      "name": "lobby2",
+      "path": "/home/michal/minecraft-servers/lobby2",
+      "start_script": "start.sh",
+      "auto_start": true,
+      "auto_restart": true
+    }
+  ]
+}
