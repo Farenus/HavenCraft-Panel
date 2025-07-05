@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HavenCraft Panel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1f2937; /* Bardziej stonowane tło */
+        }
+        .havencraft-title {
+            color: #a3d9b1; /* Twój kolor */
+        }
+        .server-card {
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        .server-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgba(163, 217, 177, 0.1), 0 4px 6px -2px rgba(163, 217, 177, 0.05);
+        }
+        .status-dot {
+            height: 12px;
+            width: 12px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        /* Pastelowe kolory statusu */
+        .status-online { background-color: #34d399; } /* Emerald 400 */
+        .status-offline { background-color: #f87171; } /* Red 400 */
+        .status-loading { background-color: #60a5fa; } /* Blue 400 */
+
+        /* Używamy klasy .hidden z Tailwind do ukrywania modala */
+    </style>
+</head>
+<body class="text-gray-200">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-12">
+            <h1 class="text-4xl md:text-5xl font-bold havencraft-title"><b>HavenCraft</b> Panel</h1>
+            <p class="text-gray-400 mt-2">Zarządzaj swoimi serwerami Minecraft w jednym miejscu.</p>
+        </header>
+
+        <main id="server-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Karty serwerów zostaną wstawione tutaj przez JavaScript -->
+        </main>
+    </div>
+
+    <!-- Modal jest domyślnie ukryty dzięki klasie 'hidden' -->
+    <div id="server-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+        <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <div class="p-4 border-b border-gray-700 flex justify-between items-center">
+                <h2 class="text-2xl font-bold flex items-center">
+                    <span id="modal-server-name" class="mr-3"></span>
+                    <span id="modal-server-status-dot" class="status-dot"></span>
+                </h2>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-white text-3xl leading-none">&times;</button>
+            </div>
+            <div class="p-6 flex-grow overflow-y-auto">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <h3 class="text-lg font-semibold mb-2">Konsola</h3>
+                        <div id="modal-console" class="bg-gray-900 rounded-md p-3 h-64 overflow-y-scroll font-mono text-sm whitespace-pre-wrap"></div>
+                        <div class="flex mt-2">
+                            <input type="text" id="console-command-input" class="bg-gray-700 flex-grow rounded-l-md p-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Wpisz komendę...">
+                            <button onclick="sendCommand()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded-r-md">Wyślij</button>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold mb-2">Gracze Online (<span id="modal-player-count">0</span>)</h3>
+                        <ul id="modal-player-list" class="bg-gray-900 rounded-md p-3 h-32 overflow-y-auto list-disc list-inside"></ul>
+                        <h3 class="text-lg font-semibold mb-2 mt-4">Ostatnie Logi</h3>
+                        <div id="modal-logs" class="bg-gray-900 rounded-md p-3 h-32 overflow-y-auto font-mono text-sm whitespace-pre-wrap"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="p-4 bg-gray-900/50 border-t border-gray-700 flex justify-end space-x-4">
+                 <button id="backup-button" onclick="createBackup()" class="bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-4 rounded-md">Stwórz Backup</button>
+                 <button id="restart-button" onclick="restartServer()" class="bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-md">Restartuj</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Konfiguracja serwerów jest teraz przekazywana z serwera Flask
+        const servers = JSON.parse('{{ servers | tojson | safe }}');
+        const serverIds = Object.keys(servers);
+
+        const serverList = document.getElementById('server-list');
+        const modal = document.getElementById('server-modal');
+        let activeServerId = null;
+
+        // Nowa funkcja do komunikacji z API panelu (który jest pośrednikiem)
+        async function fetchFromPanelApi(endpoint, serverId, method = 'GET', body = null) {
+            const url = `/api/${endpoint}/${serverId}`;
+            try {
+                const options = {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                };
+                if (body) {
+                    options.body = JSON.stringify(body);
+                }
+                const response = await fetch(url, options);
+                if (!response.ok) {
+                    // Spróbuj odczytać błąd z ciała odpowiedzi
+                    const errorData = await response.json().catch(() => ({ error: 'Błąd serwera bez dodatkowych informacji.' }));
+                    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                }
+                return await response.json();
+            } catch (error) {
+                console.error(`Błąd podczas komunikacji z panelem dla ${serverId} na ${endpoint}:`, error);
+                // Zwróć obiekt błędu, aby można go było obsłużyć w interfejsie
+                return { error: error.message };
+            }
+        }
+
+        function renderServerCards() {
+            serverList.innerHTML = '';
+            serverIds.forEach(id => {
+                const server = servers[id];
+                const card = `
+                    <div id="card-${id}" class="server-card bg-gray-800 rounded-lg p-6 shadow-lg cursor-pointer" onclick="openModal('${id}')">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h2 class="text-xl font-bold">${server.name}</h2>
+                                <p class="text-sm text-gray-400">${server.machine.replace('http://', '').split(':')[0]}</p>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span id="status-dot-${id}" class="status-dot status-loading"></span>
+                                <span id="status-text-${id}" class="text-sm font-medium text-gray-400">Ładowanie...</span>
+                            </div>
+                        </div>
+                        <div class="mt-4 flex justify-between items-center">
+                            <div>
+                                <p class="text-sm text-gray-400">Gracze:</p>
+                                <p id="players-${id}" class="text-2xl font-bold">? / ?</p>
+                            </div>
+                            <div class="flex space-x-2">
+                                <button onclick="event.stopPropagation(); toggleServer('${id}', 'start')" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-md">Włącz</button>
+                                <button onclick="event.stopPropagation(); toggleServer('${id}', 'stop')" class="bg-rose-600 hover:bg-rose-700 text-white font-bold py-2 px-4 rounded-md">Wyłącz</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                serverList.innerHTML += card;
+            });
+        }
+
+        async function updateAllServersStatus() {
+            for (const id of serverIds) {
+                const data = await fetchFromPanelApi('status', id);
+                const statusDot = document.getElementById(`status-dot-${id}`);
+                const statusText = document.getElementById(`status-text-${id}`);
+                const players = document.getElementById(`players-${id}`);
+
+                if (data && !data.error && data.is_online) {
+                    statusDot.className = 'status-dot status-online';
+                    statusText.textContent = 'Online';
+                    players.textContent = `${data.players_online} / ${data.max_players}`;
+                } else {
+                    statusDot.className = 'status-dot status-offline';
+                    statusText.textContent = 'Offline';
+                    players.textContent = `0 / ?`;
+                    if(data.error) {
+                       statusText.textContent = 'Błąd';
+                       console.error(`Błąd statusu dla ${id}: ${data.error}`);
+                    }
+                }
+            }
+        }
+
+        async function toggleServer(serverId, action) {
+            const server = servers[serverId];
+            if (!server) return;
+
+            alert(`Wysyłanie polecenia ${action} do ${server.name}...`);
+            const data = await fetchFromPanelApi(action, serverId, 'POST');
+            
+            if (data && data.status === 'success') {
+                alert(`Serwer ${server.name}: ${data.message}`);
+            } else {
+                alert(`Błąd podczas wykonywania akcji na ${server.name}: ${data.error || data.message || 'Nieznany błąd'}`);
+            }
+            setTimeout(updateAllServersStatus, 2000);
+        }
+
+        async function openModal(serverId) {
+            activeServerId = serverId;
+            const server = servers[serverId];
+            if (!server) return;
+
+            document.getElementById('modal-server-name').textContent = server.name;
+            modal.classList.remove('hidden');
+            
+            document.getElementById('modal-console').textContent = 'Ładowanie...';
+            document.getElementById('modal-logs').textContent = 'Ładowanie...';
+            document.getElementById('modal-player-list').innerHTML = '<li>Ładowanie...</li>';
+            document.getElementById('modal-player-count').textContent = '?';
+            document.getElementById('modal-server-status-dot').className = 'status-dot status-loading';
+
+            const data = await fetchFromPanelApi('details', serverId);
+            const statusDot = document.getElementById('modal-server-status-dot');
+
+            if (data && !data.error) {
+                statusDot.className = data.is_online ? 'status-dot status-online' : 'status-dot status-offline';
+                document.getElementById('modal-console').textContent = data.console_output || 'Konsola jest pusta lub serwer jest offline.';
+                document.getElementById('modal-logs').textContent = data.logs || 'Brak logów lub serwer jest offline.';
+                document.getElementById('modal-player-count').textContent = data.players_online || '0';
+                
+                const playerList = document.getElementById('modal-player-list');
+                playerList.innerHTML = ''; // Wyczyść
+                if (data.player_list && data.player_list.length > 0) {
+                    data.player_list.forEach(player => {
+                        const li = document.createElement('li');
+                        li.textContent = player;
+                        playerList.appendChild(li);
+                    });
+                } else {
+                    playerList.innerHTML = '<li>Brak graczy online.</li>';
+                }
+            } else {
+                 statusDot.className = 'status-dot status-offline';
+                 document.getElementById('modal-console').textContent = `Nie udało się załadować danych. Błąd: ${data.error}`;
+                 document.getElementById('modal-logs').textContent = 'Nie udało się załadować logów.';
+                 document.getElementById('modal-player-list').innerHTML = `<li>Błąd: ${data.error}</li>`;
+            }
+        }
+
+        function closeModal() {
+            modal.classList.add('hidden');
+            activeServerId = null;
+        }
+        
+        async function sendCommand() {
+            if (!activeServerId) return;
+            const commandInput = document.getElementById('console-command-input');
+            const command = commandInput.value;
+            if (!command) return;
+
+            const data = await fetchFromPanelApi('command', activeServerId, 'POST', { command });
+            if (data && data.status === 'success') {
+                commandInput.value = '';
+                // Można dodać odświeżenie konsoli po chwili
+            } else {
+                alert(`Błąd: ${data.error || data.message || 'Nie udało się wysłać komendy.'}`);
+            }
+        }
+
+        async function createBackup() {
+            if (!activeServerId) return;
+            const server = servers[activeServerId];
+            alert(`Rozpoczynanie tworzenia backupu dla ${server.name}...`);
+            const data = await fetchFromPanelApi('backup', activeServerId, 'POST');
+            if (data && data.status === 'success') {
+                alert(`Backup dla ${server.name} został pomyślnie utworzony.`);
+            } else {
+                alert(`Błąd podczas tworzenia backupu: ${data.error || data.message || 'Nieznany błąd'}`);
+            }
+        }
+
+        async function restartServer() {
+             if (!activeServerId) return;
+             await toggleServer(activeServerId, 'stop');
+             alert(`Serwer ${servers[activeServerId].name} jest zatrzymywany. Za 5 sekund zostanie uruchomiony ponownie.`);
+             setTimeout(async () => {
+                 await toggleServer(activeServerId, 'start');
+             }, 5000);
+        }
+
+        window.onload = () => {
+            renderServerCards();
+            updateAllServersStatus();
+            setInterval(updateAllServersStatus, 15000);
+        };
+        
+        window.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                closeModal();
+            }
+        });
+        document.getElementById('console-command-input').addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                sendCommand();
+            }
+        });
+
+    </script>
+</body>
+</html>

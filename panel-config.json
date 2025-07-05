@@ -1,0 +1,28 @@
+{
+    "servers": {
+        "proxy":  {
+            "name": "proxy",
+            "machine": "http://192.168.10.20:5001"
+        },
+        "lobby1": {
+            "name": "lobby1",
+            "machine": "http://192.168.10.20:5001"
+        },
+        "lobby2": {
+            "name": "lobby2",
+            "machine": "http://192.168.10.20:5001"
+        },
+        "staff":  {
+            "name": "staff",
+            "machine": "http://192.168.10.22:5001"
+        },
+        "game1":  {
+            "name": "game1",
+            "machine": "http://192.168.10.22:5001"
+        },
+        "game2":  {
+            "name": "game2",
+            "machine": "http://192.168.10.22:5001"
+        }
+    }
+}

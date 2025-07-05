@@ -1,0 +1,20 @@
+{
+    "servers": {
+        "proxy": {
+            "path": "/opt/minecraft/proxy",
+            "start_script": "start.sh",
+            "query_port": 25577
+        },
+        "lobby1": {
+            "path": "/opt/minecraft/lobby1",
+            "start_script": "start.sh",
+            "query_port": 25566
+        },
+        "lobby2": {
+            "path": "/opt/minecraft/lobby2",
+            "start_script": "start.sh",
+            "query_port": 25567
+        }
+    },
+    "backup_dir": "/opt/mcpanel/backups"
+}
